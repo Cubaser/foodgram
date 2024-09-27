@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from recipes.models import Recipe, Tag, Ingredient
-from django.contrib.auth.models import User
+from user.models import User
 
 class RecipeSerializer(serializers.ModelSerializer):
 
@@ -21,9 +21,17 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ['email', 'username', 'first_name', 'last_name', 'password']
+        fields = (
+            'id',
+            'email',
+            'username',
+            'first_name',
+            'last_name',
+            'avatar',
+        )
+        read_only_fields = ('id',)

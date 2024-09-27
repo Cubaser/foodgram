@@ -3,7 +3,9 @@ from recipes.models import Recipe, Tag, Ingredient
 from .serializers import (RecipeSerializer,
                           TagSerializer,
                           IngredientSerializer,
+                          UserSerializer,
                           )
+from user.models import User
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
@@ -16,3 +18,8 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
