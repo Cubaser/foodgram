@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.validators import UnicodeUsernameValidator
+#from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
+from django.conf import settings
 
 class User(AbstractUser):
 
@@ -34,3 +35,20 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class Subscription(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='follower',
+        on_delete=models.CASCADE
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='following',
+        on_delete=models.CASCADE
+    )
+
+    class Meta:
+        unique_together = ('user', 'author')
+

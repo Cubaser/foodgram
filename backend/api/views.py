@@ -5,7 +5,14 @@ from .serializers import (RecipeSerializer,
                           IngredientSerializer,
                           UserSerializer,
                           )
-from user.models import User
+from user.models import User, Subscription
+from rest_framework.permissions import IsAuthenticated
+from .serializers import SubscriptionSerializer
+from rest_framework.pagination import PageNumberPagination
+
+
+class UserPagination(PageNumberPagination):
+    page_size = 1
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
@@ -23,3 +30,17 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    pagination_class = UserPagination
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+
+
+class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = SubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return User.objects.filter(following__user=user)
