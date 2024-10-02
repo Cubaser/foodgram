@@ -5,18 +5,6 @@ from django.conf import settings
 
 class User(AbstractUser):
 
-    # username = models.CharField(
-    #     verbose_name='Уникальный юзернейм',
-    #     max_length=150,
-    #     unique=True,
-    #     validators=(UnicodeUsernameValidator,)
-    # )
-    #
-    # first_name = models.CharField(
-    #     verbose_name='Имя',
-    #     max_length=150,
-    # )
-
     email = models.EmailField(unique=True, verbose_name='Почта')
 
     USERNAME_FIELD = 'email'
