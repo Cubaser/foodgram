@@ -1,3 +1,4 @@
+from django.urls import reverse
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
@@ -65,6 +66,7 @@ class Recipe(models.Model):
     )
     ingredients = models.ManyToManyField(
         Ingredient,
+        through='RecipeIngredient',
         verbose_name='Ингридиенты',
         related_name='recipe'
     )
@@ -82,6 +84,13 @@ class Recipe(models.Model):
             )
         ]
     )
+    favorited_by = models.ManyToManyField(
+        User,
+        related_name='favorites', blank=True
+    )
+
+    def get_absolute_url(self):
+        return reverse('recipes-detail', kwargs={'pk': self.pk})
 
     class Meta:
         verbose_name = 'рецепт'
@@ -89,3 +98,23 @@ class Recipe(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class RecipeIngredient(models.Model):
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
+    amount = models.PositiveIntegerField()
+
+
+class ShoppingCart(models.Model):
+    user = models.ForeignKey(
+        User,
+        related_name='shopping_cart',
+        on_delete=models.CASCADE
+    )
+    recipe = models.ForeignKey(
+        'recipes.Recipe',
+        related_name='in_shopping_cart',
+        on_delete=models.CASCADE
+    )
+    added_at = models.DateTimeField(auto_now_add=True)

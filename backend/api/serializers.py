@@ -1,18 +1,33 @@
 from rest_framework import serializers
-from recipes.models import Recipe, Tag, Ingredient
+from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient
 from user.models import User, Subscription
 
-class RecipeSerializer(serializers.ModelSerializer):
+# class TagAmountSerializer(serializers.ModelSerializer):
+#     id = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), source='tag.id')
+#     name = serializers.CharField(source='tag.name', read_only=True)
+#     slug = serializers.CharField(source='tag.slug', read_only=True)
+#
+#     class Meta:
+#         model = Tag  # Укажите вашу модель для тегов
+#         fields = ('id', 'name', 'slug')
 
-    class Meta:
-        model = Recipe
-        fields = '__all__'
 
 class TagSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tag
         fields = '__all__'
+
+
+class IngredientAmountSerializer(serializers.ModelSerializer):
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient.id')
+    name = serializers.CharField(source='ingredient.name', read_only=True)
+    measurement_unit = serializers.CharField(source='ingredient.measurement_unit', read_only=True)
+    amount = serializers.IntegerField()
+
+    class Meta:
+        model = RecipeIngredient
+        fields = ('id', 'name', 'measurement_unit', 'amount')
 
 class IngredientSerializer(serializers.ModelSerializer):
 
@@ -139,3 +154,96 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             user=user,
             author=obj
         ).exists()
+
+
+
+
+class RecipeSerializer(serializers.ModelSerializer):
+    ingredients = IngredientAmountSerializer(many=True, source='recipeingredient_set')
+    tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all())
+    image = serializers.ImageField(required=False)
+    author = UserRetrieveSerializer(read_only=True)
+    is_favorited = serializers.SerializerMethodField()
+    is_in_shopping_cart = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Recipe
+        fields = (
+            'id', 'tags', 'author', 'ingredients', 'is_favorited',
+            'is_in_shopping_cart', 'name', 'image', 'text', 'cooking_time'
+        )
+
+    def get_is_favorited(self, obj):
+        user = self.context['request'].user
+        # Проверка, добавлен ли рецепт в избранное для текущего пользователя
+        if user.is_authenticated:
+            return user.favorites.filter(id=obj.id).exists()
+        return False
+
+    def get_is_in_shopping_cart(self, obj):
+        user = self.context['request'].user
+        # Проверка, добавлен ли рецепт в список покупок для текущего пользователя
+        if user.is_authenticated:
+            return user.shopping_cart.filter(id=obj.id).exists()
+        return False
+
+    def update(self, instance, validated_data):
+        # Обновление основных полей рецепта
+        instance.name = validated_data.get('name', instance.name)
+        instance.text = validated_data.get('text', instance.text)
+        instance.cooking_time = validated_data.get('cooking_time',
+                                                   instance.cooking_time)
+
+        # Обработка изображения
+        image_data = validated_data.get('image', None)
+        if image_data:
+            instance.image = image_data
+
+        # Сохранение обновленного экземпляра Recipe
+        instance.save()
+
+        # Обновление ингредиентов
+        ingredients_data = validated_data.get('recipeingredient_set', [])
+        if ingredients_data:
+            instance.recipeingredient_set.all().delete()  # Удаляем существующие ингредиенты
+            for ingredient_data in ingredients_data:
+                ingredient_id = ingredient_data.get(
+                    'id')  # Используем .get() для безопасного получения
+                amount = ingredient_data.get('amount')
+                if ingredient_id is not None and amount is not None:
+                    RecipeIngredient.objects.create(
+                        recipe=instance,
+                        ingredient_id=ingredient_id,
+                        amount=amount
+                    )
+
+        # Обновление тегов
+        tags_data = validated_data.get('tags', [])
+        if tags_data:  # Если есть теги для обновления
+            instance.tags.clear()  # Очистка существующих тегов
+            for tag_id in tags_data:  # Используем только идентификаторы
+                if isinstance(tag_id, int):  # Убедимся, что это число
+                    instance.tags.add(tag_id)  # Добавляем тег к рецепту
+
+        return instance
+
+    def create(self, validated_data):
+        ingredients_data = validated_data.pop('recipeingredient_set')
+        tags_data = validated_data.pop('tags')
+        recipe = Recipe.objects.create(**validated_data)
+        recipe.tags.set(tags_data)
+
+        for ingredient_data in ingredients_data:
+            RecipeIngredient.objects.create(
+                recipe=recipe,
+                ingredient=ingredient_data['ingredient']['id'],
+                amount=ingredient_data['amount']
+            )
+        return recipe
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['image'] = instance.image.url if instance.image else None
+        representation['tags'] = TagSerializer(instance.tags, many=True).data
+        return representation
+

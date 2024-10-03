@@ -1,6 +1,6 @@
 from itertools import permutations
 
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
 from recipes.models import Recipe, Tag, Ingredient
 from .serializers import (RecipeSerializer,
                           TagSerializer,
@@ -19,14 +19,101 @@ from rest_framework.decorators import action
 import base64
 from django.core.files.base import ContentFile
 from djoser.serializers import SetPasswordSerializer
+from django_filters.rest_framework import DjangoFilterBackend
 
 
 class UserPagination(PageNumberPagination):
     page_size = 1
 
+class RecipePagination(PageNumberPagination):
+    page_size_query_param = 'limit'
+
+
+
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
+    pagination_class = RecipePagination
+    filter_backends = (DjangoFilterBackend, filters.OrderingFilter)
+    ordering_fields = '__all__'
+    ordering = ['id']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Фильтрация по автору
+        author_id = self.request.query_params.get('author')
+        if author_id is not None:
+            queryset = queryset.filter(author_id=author_id)
+
+        # Фильтрация по тегам
+        tags = self.request.query_params.getlist('tags')
+        if tags:
+            queryset = queryset.filter(tags__slug__in=tags).distinct()
+
+        return queryset
+
+    def update(self, request, *args, **kwargs):
+        # Извлекаем текущее изображение
+        instance = self.get_object()
+
+        # Извлекаем изображение из запроса
+        image_data = request.data.get('image', None)
+
+        # Если изображение передано в формате base64
+        if image_data and image_data.startswith('data:image'):
+            format, imgstr = image_data.split(';base64,')
+            ext = format.split('/')[-1]
+            # Генерируем имя файла и декодируем base64
+            image_data = ContentFile(base64.b64decode(imgstr),
+                                     name=f'temp.{ext}')
+            # Заменяем в запросе значение 'image' декодированным файлом
+            request.data['image'] = image_data
+
+        # Передаем данные в сериализатор
+        serializer = self.get_serializer(instance, data=request.data,
+                                         partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return response.Response(serializer.data)
+
+
+    def create(self, request, *args, **kwargs):
+        # Извлекаем изображение из запроса
+        image_data = request.data.get('image', None)
+
+        # Если изображение передано в формате base64
+        if image_data and image_data.startswith('data:image'):
+            format, imgstr = image_data.split(';base64,')
+            ext = format.split('/')[-1]
+            # Генерируем имя файла и декодируем base64
+            image_data = ContentFile(base64.b64decode(imgstr),
+                                     name=f'temp.{ext}')
+            # Заменяем в запросе значение 'image' декодированным файлом
+            request.data['image'] = image_data
+
+        # Передаем данные в сериализатор
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+
+        return response.Response(serializer.data, status=status.HTTP_201_CREATED,
+                        headers=headers)
+
+    def perform_create(self, serializer):
+        # Сохраняем объект с сериализованными данными
+        serializer.save(author=self.request.user)
+
+    @action(detail=True, methods=['get'], url_path='get-link')
+    def get_short_link(self, request, pk=None):
+        recipe = self.get_object()  # Получаем объект рецепта по ID
+
+        # Здесь вы можете создать короткую ссылку
+        # Для примера мы просто вернем URL рецепта, вы можете заменить это на свою логику
+        short_link = request.build_absolute_uri(recipe.get_absolute_url())
+
+        return response.Response({'short-link': short_link}, status=status.HTTP_200_OK)
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
