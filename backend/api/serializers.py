@@ -2,15 +2,6 @@ from rest_framework import serializers
 from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient
 from user.models import User, Subscription
 
-# class TagAmountSerializer(serializers.ModelSerializer):
-#     id = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), source='tag.id')
-#     name = serializers.CharField(source='tag.name', read_only=True)
-#     slug = serializers.CharField(source='tag.slug', read_only=True)
-#
-#     class Meta:
-#         model = Tag  # Укажите вашу модель для тегов
-#         fields = ('id', 'name', 'slug')
-
 
 class TagSerializer(serializers.ModelSerializer):
 
@@ -19,8 +10,18 @@ class TagSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+# class IngredientAmountSerializer(serializers.ModelSerializer):
+#     id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient.id')
+#     name = serializers.CharField(source='ingredient.name', read_only=True)
+#     measurement_unit = serializers.CharField(source='ingredient.measurement_unit', read_only=True)
+#     amount = serializers.IntegerField()
+#
+#     class Meta:
+#         model = RecipeIngredient
+#         fields = ('id', 'name', 'measurement_unit', 'amount')
+
 class IngredientAmountSerializer(serializers.ModelSerializer):
-    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient.id')
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all(), source='ingredient')  # Связываем с моделью Ingredient
     name = serializers.CharField(source='ingredient.name', read_only=True)
     measurement_unit = serializers.CharField(source='ingredient.measurement_unit', read_only=True)
     amount = serializers.IntegerField()
@@ -28,6 +29,9 @@ class IngredientAmountSerializer(serializers.ModelSerializer):
     class Meta:
         model = RecipeIngredient
         fields = ('id', 'name', 'measurement_unit', 'amount')
+
+
+
 
 class IngredientSerializer(serializers.ModelSerializer):
 
@@ -173,6 +177,7 @@ class RecipeSerializer(serializers.ModelSerializer):
             'is_in_shopping_cart', 'name', 'image', 'text', 'cooking_time'
         )
 
+
     def get_is_favorited(self, obj):
         user = self.context['request'].user
         # Проверка, добавлен ли рецепт в избранное для текущего пользователя
@@ -227,18 +232,52 @@ class RecipeSerializer(serializers.ModelSerializer):
 
         return instance
 
+    # def create(self, validated_data):
+    #     ingredients_data = validated_data.pop('recipeingredient_set')
+    #     tags_data = validated_data.pop('tags')
+    #     recipe = Recipe.objects.create(**validated_data)
+    #     recipe.tags.set(tags_data)
+    #
+    #     for ingredient_data in ingredients_data:
+    #         RecipeIngredient.objects.create(
+    #             recipe=recipe,
+    #             ingredient=ingredient_data['ingredient']['id'],
+    #             amount=ingredient_data['amount']
+    #         )
+    #     return recipe
+
     def create(self, validated_data):
-        ingredients_data = validated_data.pop('recipeingredient_set')
-        tags_data = validated_data.pop('tags')
+        ingredients_data = validated_data.pop('recipeingredient_set', [])
+        tags_data = validated_data.pop('tags', [])
+
+        if not ingredients_data:
+            raise serializers.ValidationError(
+                {"ingredients": "Список ингредиентов не должен быть пустым."})
+
+        # Создаем рецепт
         recipe = Recipe.objects.create(**validated_data)
+
+        # Устанавливаем теги
         recipe.tags.set(tags_data)
 
+        # Создаем ингредиенты
         for ingredient_data in ingredients_data:
+            ingredient = ingredient_data['ingredient']
+            amount = ingredient_data['amount']
+
+            if amount <= 0:
+                raise serializers.ValidationError(
+                    {
+                        "ingredients": "Количество ингредиента должно быть больше нуля."}
+                )
+
+            # Создаем объект RecipeIngredient
             RecipeIngredient.objects.create(
                 recipe=recipe,
-                ingredient=ingredient_data['ingredient']['id'],
-                amount=ingredient_data['amount']
+                ingredient=ingredient,
+                amount=amount
             )
+
         return recipe
 
     def to_representation(self, instance):
