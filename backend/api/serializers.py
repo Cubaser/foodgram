@@ -260,6 +260,7 @@ class RecipeSerializer(serializers.ModelSerializer):
         # Устанавливаем теги
         recipe.tags.set(tags_data)
 
+
         # Создаем ингредиенты
         for ingredient_data in ingredients_data:
             ingredient = ingredient_data['ingredient']

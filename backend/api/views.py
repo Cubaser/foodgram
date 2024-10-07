@@ -201,6 +201,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
         # Обработка изображения
         image_data = request.data.get('image', None)
         if image_data and image_data.startswith('data:image'):
