@@ -171,12 +171,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
                                      status=status.HTTP_403_FORBIDDEN)
 
         # Проверка ингредиентов
-        ingredients = request.data.get('ingredients')
-        if not ingredients or len(ingredients) < 1:
+        ingredients = request.data.get('ingredients', [])
+        if not ingredients or any(
+                ingredient.get('amount', 0) < 1 for ingredient in ingredients):
             return response.Response(
-                {'detail': 'At least one ingredient is required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+                {'error': 'Количество ингредиентов должно быть больше 0'},
+                status=status.HTTP_400_BAD_REQUEST)
 
         # Проверка на дублирование ингредиентов
         ingredient_ids = [ingredient['id'] for ingredient in ingredients]
@@ -200,7 +200,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 {'detail': 'Tags must be unique.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
 
         # Обработка изображения
         image_data = request.data.get('image', None)
@@ -402,6 +401,39 @@ class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated]
 
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        author_id = request.data.get('author')
+        if not author_id:
+            return response.Response({'detail': 'Author is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if user.id == int(author_id):
+            return response.Response({'detail': 'You cannot subscribe to yourself.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        subscription, created = Subscription.objects.get_or_create(
+            user=user, author_id=author_id
+        )
+
+        if not created:
+            return response.Response({'detail': 'You are already subscribed.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(subscription)
+        return response.Response(serializer.data, status=status.HTTP_201_CREATED)
+
     def get_queryset(self):
         user = self.request.user
         return User.objects.filter(following__user=user)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        recipes_limit = request.query_params.get('recipes_limit')
+        queryset = instance.author.recipes.all()
+        if recipes_limit:
+            queryset = queryset[:int(recipes_limit)]
+        serializer = RecipeSerializer(queryset, many=True)
+        return response.Response(serializer.data)
+
+
