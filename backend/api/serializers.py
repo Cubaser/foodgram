@@ -130,34 +130,72 @@ class RecipeShortSerializer(serializers.ModelSerializer):
         model = Recipe
         fields = ('id', 'name', 'image', 'cooking_time')
 
+# class SubscriptionSerializer(serializers.ModelSerializer):
+#     recipes = RecipeShortSerializer(many=True, read_only=True)
+#     recipes_count = serializers.IntegerField(
+#         source='recipes.count',
+#         read_only=True
+#     )
+#     is_subscribed = serializers.SerializerMethodField()
+#
+#     class Meta:
+#         model = User
+#         fields = (
+#             'email',
+#             'id',
+#             'username',
+#             'first_name',
+#             'last_name',
+#             'is_subscribed',
+#             'recipes',
+#             'recipes_count',
+#             'avatar',
+#         )
+#
+#     def get_is_subscribed(self, obj):
+#         user = self.context['request'].user
+#         return Subscription.objects.filter(
+#             user=user,
+#             author=obj
+#         ).exists()
+
+
 class SubscriptionSerializer(serializers.ModelSerializer):
-    recipes = RecipeShortSerializer(many=True, read_only=True)
-    recipes_count = serializers.IntegerField(
-        source='recipes.count',
-        read_only=True
-    )
+    recipes = serializers.SerializerMethodField()
+    recipes_count = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
     is_subscribed = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
-            'email',
-            'id',
-            'username',
-            'first_name',
-            'last_name',
-            'is_subscribed',
-            'recipes',
-            'recipes_count',
-            'avatar',
+            'email', 'id', 'username', 'first_name', 'last_name',
+            'is_subscribed', 'recipes', 'recipes_count', 'avatar'
         )
 
+    def get_recipes(self, obj):
+        # Ограничение на количество рецептов
+        recipes_limit = self.context.get('recipes_limit', 3)
+        recipes = Recipe.objects.filter(author=obj)[:recipes_limit]
+        return RecipeShortSerializer(recipes, many=True).data
+
+    def get_recipes_count(self, obj):
+        # Количество рецептов автора
+        return Recipe.objects.filter(author=obj).count()
+
+
+
+    def get_avatar(self, obj):
+        # Получаем URL аватара пользователя
+        request = self.context.get('request')
+        if obj.avatar:
+            return request.build_absolute_uri(obj.avatar.url)
+        return None
+
     def get_is_subscribed(self, obj):
+        # Проверяем, подписан ли текущий пользователь
         user = self.context['request'].user
-        return Subscription.objects.filter(
-            user=user,
-            author=obj
-        ).exists()
+        return Subscription.objects.filter(user=user, author=obj).exists()
 
 
 
