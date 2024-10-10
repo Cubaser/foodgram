@@ -395,6 +395,41 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=['post'], url_path='subscribe',
+            permission_classes=[IsAuthenticated])
+    def subscribe(self, request, pk=None):
+        user = request.user
+        author = self.get_object()
+
+        if user == author:
+            return response.Response({'detail': 'Нельзя подписаться на самого себя.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Проверка на существующую подписку
+        subscription, created = Subscription.objects.get_or_create(user=user,
+                                                                   author=author)
+
+        if not created:
+            return response.Response({'detail': 'Вы уже подписаны.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = SubscriptionSerializer(subscription)
+        return response.Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'], url_path='subscribe',
+            permission_classes=[IsAuthenticated])
+    def get_subscription(self, request, pk=None):
+        author = self.get_object()
+        recipes_limit = request.query_params.get('recipes_limit')
+
+        # Получаем рецепты автора
+        recipes = Recipe.objects.filter(author=author)
+        if recipes_limit:
+            recipes = recipes[:int(recipes_limit)]
+
+        recipe_serializer = RecipeSerializer(recipes, many=True)
+        return response.Response(recipe_serializer.data, status=status.HTTP_200_OK)
+
 
 
 class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
