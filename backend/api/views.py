@@ -1,13 +1,14 @@
 
 from rest_framework import viewsets, filters
-from recipes.models import Recipe, Tag, Ingredient
+from recipes.models import Recipe, Tag, Ingredient, ShoppingCart, Favorite
 from .serializers import (RecipeSerializer,
                           TagSerializer,
                           IngredientSerializer,
                           UserSerializer,
                           UserCreateSerializer,
                           UserListSerializer,
-                          UserRetrieveSerializer
+                          UserRetrieveSerializer,
+                          ShoppingCartSerializer
                           )
 from user.models import User, Subscription
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
@@ -21,6 +22,8 @@ import base64
 from django.core.files.base import ContentFile
 from djoser.serializers import SetPasswordSerializer
 from django_filters.rest_framework import DjangoFilterBackend
+from django.http import HttpResponse
+import csv
 
 
 class UserPagination(PageNumberPagination):
@@ -33,92 +36,6 @@ class RecipePagination(PageNumberPagination):
 class RecipeTagPagination(PageNumberPagination):
     page_size_query_param = 'limit'
 
-# class RecipeViewSet(viewsets.ModelViewSet):
-#     queryset = Recipe.objects.all()
-#     serializer_class = RecipeSerializer
-#     pagination_class = RecipePagination
-#     filter_backends = (DjangoFilterBackend, filters.OrderingFilter)
-#     ordering_fields = '__all__'
-#     #ordering = ['id']
-#     #permission_classes = [IsAuthenticated]
-#
-#     def get_queryset(self):
-#         queryset = super().get_queryset()
-#
-#         # Фильтрация по автору
-#         author_id = self.request.query_params.get('author')
-#         if author_id is not None:
-#             queryset = queryset.filter(author_id=author_id)
-#
-#         # Фильтрация по тегам
-#         tags = self.request.query_params.getlist('tags')
-#         if tags:
-#             self.pagination_class = RecipeTagPagination
-#             queryset = queryset.filter(tags__slug__in=tags).distinct()
-#
-#         return queryset
-#
-#     def update(self, request, *args, **kwargs):
-#         # Извлекаем текущее изображение
-#         instance = self.get_object()
-#
-#         # Извлекаем изображение из запроса
-#         image_data = request.data.get('image', None)
-#
-#         # Если изображение передано в формате base64
-#         if image_data and image_data.startswith('data:image'):
-#             format, imgstr = image_data.split(';base64,')
-#             ext = format.split('/')[-1]
-#             # Генерируем имя файла и декодируем base64
-#             image_data = ContentFile(base64.b64decode(imgstr),
-#                                      name=f'temp.{ext}')
-#             # Заменяем в запросе значение 'image' декодированным файлом
-#             request.data['image'] = image_data
-#
-#         # Передаем данные в сериализатор
-#         serializer = self.get_serializer(instance, data=request.data,
-#                                          partial=True)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_update(serializer)
-#         return response.Response(serializer.data)
-#
-#
-#     def create(self, request, *args, **kwargs):
-#         # Извлекаем изображение из запроса
-#         image_data = request.data.get('image', None)
-#
-#         # Если изображение передано в формате base64
-#         if image_data and image_data.startswith('data:image'):
-#             format, imgstr = image_data.split(';base64,')
-#             ext = format.split('/')[-1]
-#             # Генерируем имя файла и декодируем base64
-#             image_data = ContentFile(base64.b64decode(imgstr),
-#                                      name=f'temp.{ext}')
-#             # Заменяем в запросе значение 'image' декодированным файлом
-#             request.data['image'] = image_data
-#
-#         # Передаем данные в сериализатор
-#         serializer = self.get_serializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_create(serializer)
-#         headers = self.get_success_headers(serializer.data)
-#
-#         return response.Response(serializer.data, status=status.HTTP_201_CREATED,
-#                         headers=headers)
-#
-#     def perform_create(self, serializer):
-#         # Сохраняем объект с сериализованными данными
-#         serializer.save(author=self.request.user)
-#
-#     @action(detail=True, methods=['get'], url_path='get-link')
-#     def get_short_link(self, request, pk=None):
-#         recipe = self.get_object()  # Получаем объект рецепта по ID
-#
-#         # Здесь вы можете создать короткую ссылку
-#         # Для примера мы просто вернем URL рецепта, вы можете заменить это на свою логику
-#         short_link = request.build_absolute_uri(recipe.get_absolute_url())
-#
-#         return response.Response({'short-link': short_link}, status=status.HTTP_200_OK)
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -131,6 +48,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
 
         # Фильтрация по автору
         author_id = self.request.query_params.get('author')
@@ -143,25 +61,22 @@ class RecipeViewSet(viewsets.ModelViewSet):
             self.pagination_class = RecipeTagPagination
             queryset = queryset.filter(tags__slug__in=tags).distinct()
 
-        return queryset
+        # Фильтрация по корзине
+        is_in_shopping_cart = self.request.query_params.get(
+            'is_in_shopping_cart')
 
-    # def update(self, request, *args, **kwargs):
-    #     instance = self.get_object()
-    #
-    #     # Извлекаем изображение из запроса
-    #     image_data = request.data.get('image', None)
-    #     if image_data and image_data.startswith('data:image'):
-    #         format, imgstr = image_data.split(';base64,')
-    #         ext = format.split('/')[-1]
-    #         image_data = ContentFile(base64.b64decode(imgstr),
-    #                                  name=f'temp.{ext}')
-    #         request.data['image'] = image_data
-    #
-    #     serializer = self.get_serializer(instance, data=request.data,
-    #                                      partial=True)
-    #     serializer.is_valid(raise_exception=True)
-    #     self.perform_update(serializer)
-    #     return response.Response(serializer.data)
+
+        # Если параметр is_in_shopping_cart равен '1', фильтруем рецепты, которые есть в корзине пользователя
+        if is_in_shopping_cart == '1' and user.is_authenticated:
+            queryset = queryset.filter(in_shopping_cart__user=user)
+
+        # Если параметр is_in_shopping_cart равен '0', исключаем рецепты, которые есть в корзине пользователя
+        elif is_in_shopping_cart == '0' and user.is_authenticated:
+            queryset = queryset.exclude(in_shopping_cart__user=user)
+
+
+
+        return queryset
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -280,6 +195,85 @@ class RecipeViewSet(viewsets.ModelViewSet):
         short_link = request.build_absolute_uri(recipe.get_absolute_url())
         return Response({'short-link': short_link},
                                  status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'],
+            permission_classes=[IsAuthenticated])
+    def shopping_cart(self, request, pk=None):
+        recipe = get_object_or_404(Recipe, pk=pk)  # Найти рецепт по ID
+        user = request.user
+
+        # Проверяем, есть ли уже этот рецепт в корзине
+        if ShoppingCart.objects.filter(user=user, recipe=recipe).exists():
+            return Response(
+                {'detail': 'Рецепт уже добавлен в корзину.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Если рецепта нет в корзине, добавляем его
+        ShoppingCart.objects.create(user=user, recipe=recipe)
+
+        # Отправляем ответ с данными о рецепте
+        serializer = ShoppingCartSerializer(recipe,
+                                                  context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'],
+            permission_classes=[IsAuthenticated])
+    def download_shopping_cart(self, request):
+        # Получаем все рецепты из корзины пользователя
+        user = request.user
+        shopping_cart = ShoppingCart.objects.filter(user=user)
+
+        if not shopping_cart.exists():
+            return Response({'detail': 'Корзина пуста.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Формируем данные для файла
+        shopping_list = []
+        for item in shopping_cart:
+            ingredients = Ingredient.objects.filter(recipe=item.recipe)
+            for ingredient in ingredients:
+                shopping_list.append(
+                    f"{ingredient.name} - {ingredient.amount} {ingredient.unit}")
+
+        # Создаем ответ в формате txt
+        response = HttpResponse(content_type='text/plain')
+        response[
+            'Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
+
+        response.write("Список покупок:\n\n")
+        for item in shopping_list:
+            response.write(f"{item}\n")
+
+        return response
+
+    @action(detail=True, methods=['post'],
+            permission_classes=[IsAuthenticated])
+    def favorite(self, request, pk=None):
+        user = request.user
+        recipe = self.get_object()
+
+        # Проверка, что рецепт уже в избранном
+        if Favorite.objects.filter(user=user, recipe=recipe).exists():
+            return Response(
+                {'detail': 'Рецепт уже в избранном.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Добавляем рецепт в избранное
+        Favorite.objects.create(user=user, recipe=recipe)
+
+        # Формируем и возвращаем ответ
+        recipe_data = {
+            'id': recipe.id,
+            'name': recipe.name,
+            'image': request.build_absolute_uri(recipe.image.url),
+            'cooking_time': recipe.cooking_time
+        }
+
+        return Response(recipe_data, status=status.HTTP_201_CREATED)
+
+    action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
@@ -426,104 +420,15 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = SubscriptionSerializer(author, context=context)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    # @action(detail=True, methods=['post'], url_path='subscribe',
-    #         permission_classes=[IsAuthenticated])
-    # def subscribe(self, request, pk=None):
-    #     user = request.user
-    #     author = self.get_object()
-    #
-    #     if user == author:
-    #         return response.Response({'detail': 'Нельзя подписаться на самого себя.'},
-    #                         status=status.HTTP_400_BAD_REQUEST)
-    #
-    #     # Проверка на существующую подписку
-    #     subscription, created = Subscription.objects.get_or_create(user=user,
-    #                                                                author=author)
-    #
-    #     if not created:
-    #         return response.Response({'detail': 'Вы уже подписаны.'},
-    #                         status=status.HTTP_400_BAD_REQUEST)
-    #
-    #     serializer = SubscriptionSerializer(subscription)
-    #     return response.Response(serializer.data, status=status.HTTP_201_CREATED)
-    #
-    # @action(detail=True, methods=['get'], url_path='subscribe',
-    #         permission_classes=[IsAuthenticated])
-    # def get_subscription(self, request, pk=None):
-    #     author = self.get_object()
-    #     recipes_limit = request.query_params.get('recipes_limit')
-    #
-    #     # Получаем рецепты автора
-    #     recipes = Recipe.objects.filter(author=author)
-    #     if recipes_limit:
-    #         recipes = recipes[:int(recipes_limit)]
-    #
-    #     recipe_serializer = RecipeSerializer(recipes, many=True)
-    #     return response.Response(recipe_serializer.data, status=status.HTTP_200_OK)
-
-
-
-# class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
-#     serializer_class = SubscriptionSerializer
-#     permission_classes = [IsAuthenticated]
-#
-#     def create(self, request, *args, **kwargs):
-#         user = request.user
-#         author_id = request.data.get('author')
-#         if not author_id:
-#             return Response({'detail': 'Author is required.'},
-#                             status=status.HTTP_400_BAD_REQUEST)
-#
-#         if user.id == int(author_id):
-#             return Response({'detail': 'You cannot subscribe to yourself.'},
-#                             status=status.HTTP_400_BAD_REQUEST)
-#
-#         subscription, created = Subscription.objects.get_or_create(
-#             user=user, author_id=author_id
-#         )
-#
-#         if not created:
-#             return Response({'detail': 'You are already subscribed.'},
-#                             status=status.HTTP_400_BAD_REQUEST)
-#
-#         serializer = self.get_serializer(subscription)
-#         return Response(serializer.data, status=status.HTTP_201_CREATED)
-#
-#     def get_queryset(self):
-#         user = self.request.user
-#         return User.objects.filter(following__user=user)
-#
-#     def retrieve(self, request, *args, **kwargs):
-#         instance = self.get_object()
-#         recipes_limit = request.query_params.get('recipes_limit')
-#         queryset = instance.author.recipes.all()
-#         if recipes_limit:
-#             queryset = queryset[:int(recipes_limit)]
-#         serializer = RecipeSerializer(queryset, many=True)
-#         return Response(serializer.data)
-
-
-class SubscriptionPagination(PageNumberPagination):
-    page_size = 10  # Настроить количество объектов на странице по умолчанию
-
-
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    permission_classes = [
-        IsAuthenticated]  # Только аутентифицированные пользователи могут просматривать свои подписки
-    pagination_class = SubscriptionPagination  # Добавить пагинацию
-
-    def get_queryset(self):
-        # Возвращаем подписки для текущего пользователя
-        return Subscription.objects.filter(user=self.request.user)
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = SubscriptionSerializer(page, many=True,
-                                                context={'request': request})
-            return self.get_paginated_response(serializer.data)
-
-        serializer = SubscriptionSerializer(queryset, many=True,
+    @action(detail=False, methods=['get'],
+            permission_classes=[IsAuthenticated])
+    def subscriptions(self, request):
+        follows = Subscription.objects.filter(user=request.user)
+        authors = [follow.author for follow in
+                   follows]  # Получаем авторов подписок
+        pages = self.paginate_queryset(authors)
+        serializer = SubscriptionSerializer(pages, many=True,
                                             context={'request': request})
-        return Response(serializer.data)
+        return self.get_paginated_response(serializer.data)
+
+
