@@ -23,7 +23,6 @@ from django.core.files.base import ContentFile
 from djoser.serializers import SetPasswordSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
-import csv
 
 
 class UserPagination(PageNumberPagination):
@@ -65,16 +64,17 @@ class RecipeViewSet(viewsets.ModelViewSet):
         is_in_shopping_cart = self.request.query_params.get(
             'is_in_shopping_cart')
 
-
-        # Если параметр is_in_shopping_cart равен '1', фильтруем рецепты, которые есть в корзине пользователя
         if is_in_shopping_cart == '1' and user.is_authenticated:
             queryset = queryset.filter(in_shopping_cart__user=user)
-
-        # Если параметр is_in_shopping_cart равен '0', исключаем рецепты, которые есть в корзине пользователя
         elif is_in_shopping_cart == '0' and user.is_authenticated:
             queryset = queryset.exclude(in_shopping_cart__user=user)
 
-
+        # Проверка параметра is_favorited
+        is_favorited = self.request.query_params.get('is_favorited')
+        if is_favorited == '1' and user.is_authenticated:
+            queryset = queryset.filter(favorited_by=user)
+        elif is_favorited == '0' and user.is_authenticated:
+            queryset = queryset.exclude(favorited_by=user)
 
         return queryset
 
@@ -196,26 +196,43 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return Response({'short-link': short_link},
                                  status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'],
+    @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def shopping_cart(self, request, pk=None):
-        recipe = get_object_or_404(Recipe, pk=pk)  # Найти рецепт по ID
         user = request.user
+        recipe = get_object_or_404(Recipe, pk=pk)
 
-        # Проверяем, есть ли уже этот рецепт в корзине
-        if ShoppingCart.objects.filter(user=user, recipe=recipe).exists():
-            return Response(
-                {'detail': 'Рецепт уже добавлен в корзину.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if request.method == 'POST':
+            if ShoppingCart.objects.filter(user=user, recipe=recipe).exists():
+                return Response(
+                    {'detail': 'Этот рецепт уже добавлен в корзину.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # Если рецепта нет в корзине, добавляем его
-        ShoppingCart.objects.create(user=user, recipe=recipe)
+            # Добавляем рецепт в корзину
+            ShoppingCart.objects.create(user=user, recipe=recipe)
 
-        # Отправляем ответ с данными о рецепте
-        serializer = ShoppingCartSerializer(recipe,
-                                                  context={'request': request})
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            response_data = {
+                'id': recipe.id,
+                'name': recipe.name,
+                'image': request.build_absolute_uri(
+                    recipe.image.url) if recipe.image else None,
+                'cooking_time': recipe.cooking_time
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        elif request.method == 'DELETE':
+            cart_item = ShoppingCart.objects.filter(user=user,
+                                                    recipe=recipe).first()
+            if not cart_item:
+                return Response(
+                    {'detail': 'Этот рецепт не добавлен в корзину.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Удаляем рецепт из корзины
+            cart_item.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'],
             permission_classes=[IsAuthenticated])
@@ -247,33 +264,60 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         return response
 
-    @action(detail=True, methods=['post'],
+    @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def favorite(self, request, pk=None):
         user = request.user
         recipe = self.get_object()
 
-        # Проверка, что рецепт уже в избранном
-        if Favorite.objects.filter(user=user, recipe=recipe).exists():
+        if request.method == 'POST':
+            # Проверка, что рецепт уже в избранном
+            if Favorite.objects.filter(user=user, recipe=recipe).exists():
+                return Response(
+                    {'detail': 'Рецепт уже в избранном.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Добавляем рецепт в избранное
+            Favorite.objects.create(user=user, recipe=recipe)
+
+            # Формируем и возвращаем ответ
+            recipe_data = {
+                'id': recipe.id,
+                'name': recipe.name,
+                'image': request.build_absolute_uri(recipe.image.url),
+                'cooking_time': recipe.cooking_time
+            }
+
+            return Response(recipe_data, status=status.HTTP_201_CREATED)
+
+        elif request.method == 'DELETE':
+            # Проверка, что рецепт в избранном
+            favorite_item = Favorite.objects.filter(user=user,
+                                                    recipe=recipe).first()
+            if not favorite_item:
+                return Response(
+                    {'detail': 'Рецепт не добавлен в избранное.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Удаляем рецепт из избранного
+            favorite_item.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def destroy(self, request, pk=None):
+        recipe = self.get_object()
+
+        # Проверка, является ли пользователь автором рецепта
+        if recipe.author != request.user:
             return Response(
-                {'detail': 'Рецепт уже в избранном.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'detail': 'У вас нет прав на удаление этого рецепта.'},
+                status=status.HTTP_403_FORBIDDEN
             )
 
-        # Добавляем рецепт в избранное
-        Favorite.objects.create(user=user, recipe=recipe)
-
-        # Формируем и возвращаем ответ
-        recipe_data = {
-            'id': recipe.id,
-            'name': recipe.name,
-            'image': request.build_absolute_uri(recipe.image.url),
-            'cooking_time': recipe.cooking_time
-        }
-
-        return Response(recipe_data, status=status.HTTP_201_CREATED)
-
-    action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+        # Удаление рецепта
+        recipe.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
@@ -391,34 +435,50 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'],
+    @action(detail=True, methods=['post', 'delete'],
             permission_classes=[IsAuthenticated])
     def subscribe(self, request, pk=None):
         user = request.user
         author = get_object_or_404(User, pk=pk)
 
-        # Проверка на попытку подписаться на самого себя
-        if user == author:
-            return Response({'detail': 'Нельзя подписаться на самого себя.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+        if request.method == 'POST':
+            # Проверка на попытку подписаться на самого себя
+            if user == author:
+                return Response(
+                    {'detail': 'Нельзя подписаться на самого себя.'},
+                    status=status.HTTP_400_BAD_REQUEST)
 
-        if Subscription.objects.filter(user=user, author=author).exists():
-            return Response(
-                {'detail': 'Вы уже подписаны на этого пользователя.'},
-                status=status.HTTP_400_BAD_REQUEST)
+            if Subscription.objects.filter(user=user, author=author).exists():
+                return Response(
+                    {'detail': 'Вы уже подписаны на этого пользователя.'},
+                    status=status.HTTP_400_BAD_REQUEST)
 
-        # Создаем подписку
-        Subscription.objects.create(user=user, author=author)
+            # Создаем подписку
+            Subscription.objects.create(user=user, author=author)
 
-        # Обрабатываем параметр recipes_limit
-        recipes_limit = request.query_params.get('recipes_limit', None)
-        context = {'request': request}
-        if recipes_limit:
-            context['recipes_limit'] = int(recipes_limit)
+            # Обрабатываем параметр recipes_limit
+            recipes_limit = request.query_params.get('recipes_limit', None)
+            context = {'request': request}
+            if recipes_limit:
+                context['recipes_limit'] = int(recipes_limit)
 
-        # Возвращаем сериализованный ответ
-        serializer = SubscriptionSerializer(author, context=context)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Возвращаем сериализованный ответ
+            serializer = SubscriptionSerializer(author, context=context)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        elif request.method == 'DELETE':
+            # Проверяем, есть ли подписка на автора
+            subscription = Subscription.objects.filter(user=user,
+                                                       author=author)
+            if not subscription.exists():
+                return Response(
+                    {'detail': 'Вы не подписаны на этого пользователя.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Удаляем подписку
+            subscription.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'],
             permission_classes=[IsAuthenticated])

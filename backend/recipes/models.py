@@ -86,7 +86,9 @@ class Recipe(models.Model):
     )
     favorited_by = models.ManyToManyField(
         User,
-        related_name='favorites', blank=True
+        through='Favorite',
+        related_name='favorites',
+        blank=True
     )
 
     def get_absolute_url(self):

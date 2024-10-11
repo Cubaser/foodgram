@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient
+from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient, Favorite
 from user.models import User, Subscription
 
 
@@ -177,12 +177,10 @@ class RecipeSerializer(serializers.ModelSerializer):
             'is_in_shopping_cart', 'name', 'image', 'text', 'cooking_time'
         )
 
-
     def get_is_favorited(self, obj):
-        user = self.context['request'].user
-        # Проверка, добавлен ли рецепт в избранное для текущего пользователя
+        user = self.context.get('request').user
         if user.is_authenticated:
-            return user.favorites.filter(id=obj.id).exists()
+            return Favorite.objects.filter(recipe=obj, user=user).exists()
         return False
 
     def get_is_in_shopping_cart(self, obj):
@@ -273,42 +271,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         representation['image'] = instance.image.url if instance.image else None
         representation['tags'] = TagSerializer(instance.tags, many=True).data
         return representation
-
-
-
-# class ShoppingCartSerializer(serializers.ModelSerializer):
-#     recipes = serializers.SerializerMethodField()
-#     recipes_count = serializers.SerializerMethodField()
-#     avatar = serializers.SerializerMethodField()
-#     is_subscribed = serializers.SerializerMethodField()
-#
-#     class Meta:
-#         model = User
-#         fields = (
-#             'email', 'id', 'username', 'first_name', 'last_name',
-#             'is_subscribed', 'recipes', 'recipes_count', 'avatar'
-#         )
-#
-#     def get_recipes(self, obj):
-#         request = self.context.get('request')
-#         limit = request.GET.get('recipes_limit')
-#         recipes = Recipe.objects.filter(author=obj)
-#         if limit and limit.isdigit():
-#             recipes = recipes[:int(limit)]
-#         return RecipeShortSerializer(recipes, many=True).data
-#
-#     def get_recipes_count(self, obj):
-#         return Recipe.objects.filter(author=obj).count()
-#
-#     def get_avatar(self, obj):
-#         request = self.context.get('request')
-#         if obj.avatar:
-#             return request.build_absolute_uri(obj.avatar.url)
-#         return None
-#
-#     def get_is_subscribed(self, obj):
-#         user = self.context['request'].user
-#         return Subscription.objects.filter(user=user, author=obj).exists()
 
 
 class ShoppingCartSerializer(serializers.ModelSerializer):
