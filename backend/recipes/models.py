@@ -2,7 +2,6 @@ from django.urls import reverse
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
-from foodgram.constants import Constants
 
 User = get_user_model()
 
@@ -35,7 +34,7 @@ class Ingredient(models.Model):
     )
     measurement_unit = models.CharField(
         verbose_name='Единицы измерения',
-        max_length=10 # надо уточнить
+        max_length=10  # надо уточнить
     )
 
     class Meta:
@@ -79,8 +78,8 @@ class Recipe(models.Model):
         verbose_name='Время приготовления',
         validators=[
             MinValueValidator(
-                Constants.COOKING_TIME_MIN_VALUE,
-                Constants.COOKING_TIME_MIN_MASSAGE
+                1,
+                'Слишком низкое значение'
             )
         ]
     )
@@ -120,6 +119,7 @@ class ShoppingCart(models.Model):
         on_delete=models.CASCADE
     )
     added_at = models.DateTimeField(auto_now_add=True)
+
 
 class Favorite(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

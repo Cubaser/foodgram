@@ -1,10 +1,9 @@
 from django.contrib.auth.models import AbstractUser
-#from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.conf import settings
 
-class User(AbstractUser):
 
+class User(AbstractUser):
     email = models.EmailField(unique=True, verbose_name='Почта')
 
     USERNAME_FIELD = 'email'
@@ -39,4 +38,3 @@ class Subscription(models.Model):
 
     class Meta:
         unique_together = ('user', 'author')
-
