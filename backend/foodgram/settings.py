@@ -21,6 +21,8 @@ DEBUG = False
 ALLOWED_HOSTS = [
     '127.0.0.1',
     'localhost',
+    '89.169.163.122',
+    'foodgram.sytes.net'
 ]
 
 # Application definition
