@@ -1,5 +1,6 @@
 from django.contrib.admin import ModelAdmin, register
-from .models import Tag, Ingredient, Recipe
+
+from .models import Ingredient, Recipe, Tag
 
 
 @register(Tag)
@@ -10,12 +11,14 @@ class TagAdmin(ModelAdmin):
     )
     prepopulated_fields = {'slug': ('name',)}
 
+
 @register(Ingredient)
 class IngredientAdmin(ModelAdmin):
     list_display = (
         'name',
         'measurement_unit',
     )
+
 
 @register(Recipe)
 class RecipeAdmin(ModelAdmin):

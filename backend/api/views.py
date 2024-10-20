@@ -252,7 +252,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             ingredients = Ingredient.objects.filter(recipe=item.recipe)
             for ingredient in ingredients:
                 shopping_list.append(
-                    f"{ingredient.name} - {ingredient.amount} {ingredient.unit}")
+                    f"{ingredient.name} - {ingredient.amount} "
+                    f"{ingredient.unit}"
+                )
 
         response = HttpResponse(content_type='text/plain')
         response[
