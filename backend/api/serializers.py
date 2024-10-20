@@ -1,6 +1,6 @@
+from recipes.models import Favorite, Ingredient, Recipe, RecipeIngredient, Tag
 from rest_framework import serializers
-from recipes.models import Recipe, Tag, Ingredient, RecipeIngredient, Favorite
-from user.models import User, Subscription
+from user.models import Subscription, User
 
 
 class TagSerializer(serializers.ModelSerializer):

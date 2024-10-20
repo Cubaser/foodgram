@@ -1,27 +1,23 @@
-from rest_framework import viewsets, filters
-from recipes.models import Recipe, Tag, Ingredient, ShoppingCart, Favorite
-from .serializers import (RecipeSerializer,
-                          TagSerializer,
-                          IngredientSerializer,
-                          UserSerializer,
-                          UserCreateSerializer,
-                          UserListSerializer,
-                          UserRetrieveSerializer
-                          )
-from user.models import User, Subscription
-from rest_framework.permissions import IsAuthenticated, \
-    IsAuthenticatedOrReadOnly
-from .serializers import SubscriptionSerializer
-from rest_framework.pagination import PageNumberPagination
-from rest_framework import status
-from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
-from rest_framework.decorators import action
 import base64
+
 from django.core.files.base import ContentFile
-from djoser.serializers import SetPasswordSerializer
-from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from djoser.serializers import SetPasswordSerializer
+from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
+from rest_framework.response import Response
+from user.models import Subscription, User
+
+from .serializers import (IngredientSerializer, RecipeSerializer,
+                          SubscriptionSerializer, TagSerializer,
+                          UserCreateSerializer, UserListSerializer,
+                          UserRetrieveSerializer, UserSerializer)
 
 
 class UserPagination(PageNumberPagination):
