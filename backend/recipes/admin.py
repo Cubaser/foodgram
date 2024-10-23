@@ -1,5 +1,7 @@
 from django.contrib.admin import ModelAdmin, register, TabularInline
+
 from .models import Ingredient, Recipe, Tag, RecipeIngredient
+
 
 class RecipeIngredientInline(TabularInline):
     model = RecipeIngredient
@@ -37,7 +39,9 @@ class RecipeAdmin(ModelAdmin):
         return queryset
 
     def get_ingredients(self, obj):
-        return ", ".join([ingredient.name for ingredient in obj.ingredients.all()])
+        return ", ".join(
+            [ingredient.name for ingredient in obj.ingredients.all()]
+        )
     get_ingredients.short_description = 'Ингредиенты'
 
     def get_tags(self, obj):
