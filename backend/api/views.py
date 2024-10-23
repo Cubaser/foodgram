@@ -8,21 +8,17 @@ from djoser.serializers import SetPasswordSerializer
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 
 from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from user.models import Subscription, User
-from .serializers import (
-    IngredientSerializer,
-    RecipeSerializer,
-    SubscriptionSerializer,
-    TagSerializer,
-    UserCreateSerializer,
-    UserListSerializer,
-    UserRetrieveSerializer,
-    UserSerializer
-)
+
+from .serializers import (IngredientSerializer, RecipeSerializer,
+                          SubscriptionSerializer, TagSerializer,
+                          UserCreateSerializer, UserListSerializer,
+                          UserRetrieveSerializer, UserSerializer)
 
 
 class UserPagination(PageNumberPagination):
