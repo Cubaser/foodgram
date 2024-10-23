@@ -14,7 +14,11 @@ class User(AbstractUser):
         'password'
     )
 
-    avatar = models.ImageField(blank=True, null=True)
+    avatar = models.ImageField(
+        blank=True,
+        null=True,
+        verbose_name='Аватар'
+    )
 
     class Meta:
         verbose_name = 'пользователь'
@@ -28,13 +32,20 @@ class Subscription(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name='follower',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        verbose_name='Подписчик'
     )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name='following',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        verbose_name='Автор'
     )
 
     class Meta:
         unique_together = ('user', 'author')
+        verbose_name = 'подписка'
+        verbose_name_plural = 'Подписки'
+
+    def __str__(self):
+        return f'{self.user} подписан на {self.author}'

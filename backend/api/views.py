@@ -5,19 +5,24 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.serializers import SetPasswordSerializer
-from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from user.models import Subscription, User
 
-from .serializers import (IngredientSerializer, RecipeSerializer,
-                          SubscriptionSerializer, TagSerializer,
-                          UserCreateSerializer, UserListSerializer,
-                          UserRetrieveSerializer, UserSerializer)
+from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
+from user.models import Subscription, User
+from .serializers import (
+    IngredientSerializer,
+    RecipeSerializer,
+    SubscriptionSerializer,
+    TagSerializer,
+    UserCreateSerializer,
+    UserListSerializer,
+    UserRetrieveSerializer,
+    UserSerializer
+)
 
 
 class UserPagination(PageNumberPagination):
@@ -80,35 +85,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        ingredients = request.data.get('ingredients', [])
-        if not ingredients or any(
-                ingredient.get('amount', 0) < 1 for ingredient in ingredients
-        ):
-            return Response(
-                {'error': 'Количество ингредиентов должно быть больше 0'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        ingredient_ids = [ingredient['id'] for ingredient in ingredients]
-        if len(ingredient_ids) != len(set(ingredient_ids)):
-            return Response(
-                {'detail': 'Ингридиенты должны быть уникальными'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        tags = request.data.get('tags')
-        if not tags:
-            return Response(
-                {'detail': "Теги не могут быть пустыми"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if len(tags) != len(set(tags)):
-            return Response(
-                {'detail': "Теги должны быть уникальными"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         image_data = request.data.get('image', None)
         if image_data and image_data.startswith('data:image'):
             format, imgstr = image_data.split(';base64,')
@@ -129,32 +105,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
 
-        ingredients = request.data.get('ingredients', [])
-        ingredient_ids = [ingredient['id'] for ingredient in ingredients]
-
-        if len(ingredient_ids) != len(set(ingredient_ids)):
-            return Response(
-                {"detail": "Ингредиенты должны быть уникальными"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        tags = request.data.get('tags', [])
-        if not tags:
-            return Response(
-                {"detail": "Теги не могут быть пустыми"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if len(tags) != len(set(tags)):
-            return Response(
-                {"detail": "Теги должны быть уникальными"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         image_data = request.data.get('image', None)
         if not image_data:
             return Response(
-                {"detail": "Поле с изображением обязательно."},
+                {'detail': 'Поле с изображением обязательно.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -200,7 +154,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = get_object_or_404(Recipe, pk=pk)
 
         if request.method == 'POST':
-            if ShoppingCart.objects.filter(user=user, recipe=recipe).exists():
+            if user.shopping_cart.filter(recipe=recipe).exists():
                 return Response(
                     {'detail': 'Этот рецепт уже добавлен в корзину'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -218,10 +172,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         elif request.method == 'DELETE':
-            cart_item = ShoppingCart.objects.filter(
-                user=user,
-                recipe=recipe
-            ).first()
+            cart_item = user.shopping_cart.filter(recipe=recipe).first()
             if not cart_item:
                 return Response(
                     {'detail': 'Этот рецепт не добавлен в корзину.'},
@@ -239,7 +190,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def download_shopping_cart(self, request):
 
         user = request.user
-        shopping_cart = ShoppingCart.objects.filter(user=user)
+        shopping_cart = user.shopping_cart.all()
 
         if not shopping_cart.exists():
             return Response(
@@ -249,7 +200,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         shopping_list = []
         for item in shopping_cart:
-            ingredients = Ingredient.objects.filter(recipe=item.recipe)
+            ingredients = item.recipe.ingredients.all()
             for ingredient in ingredients:
                 shopping_list.append(
                     f"{ingredient.name} - {ingredient.amount} "
@@ -277,7 +228,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = self.get_object()
 
         if request.method == 'POST':
-            if Favorite.objects.filter(user=user, recipe=recipe).exists():
+            if recipe in user.favorites.all():
                 return Response(
                     {'detail': 'Рецепт уже в избранном'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -295,17 +246,12 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(recipe_data, status=status.HTTP_201_CREATED)
 
         elif request.method == 'DELETE':
-            favorite_item = Favorite.objects.filter(
-                user=user,
-                recipe=recipe
-            ).first()
-            if not favorite_item:
+            if not user.favorites.filter(id=recipe.id).exists():
                 return Response(
                     {'detail': 'Рецепт не добавлен в избранное'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            favorite_item.delete()
+            user.favorites.remove(recipe)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
     def destroy(self, request, pk=None):
@@ -351,9 +297,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return UserRetrieveSerializer
-        elif self.action == 'list':
+        if self.action == 'list':
             return UserListSerializer
-        elif self.action == 'create':
+        if self.action == 'create':
             return super().get_serializer_class()
 
     def create(self, request, *args, **kwargs):
@@ -441,6 +387,8 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    from rest_framework.exceptions import PermissionDenied
+
     @action(
         detail=True,
         methods=['post', 'delete'],
@@ -456,7 +404,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     {'detail': 'Нельзя подписаться на самого себя.'},
                     status=status.HTTP_400_BAD_REQUEST)
 
-            if Subscription.objects.filter(user=user, author=author).exists():
+            if user.follower.filter(author=author).exists():
                 return Response(
                     {'detail': 'Вы уже подписаны на этого пользователя.'},
                     status=status.HTTP_400_BAD_REQUEST)
@@ -472,10 +420,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         elif request.method == 'DELETE':
-            subscription = Subscription.objects.filter(
-                user=user,
-                author=author
-            )
+            subscription = user.follower.filter(author=author)
             if not subscription.exists():
                 return Response(
                     {'detail': 'Вы не подписаны на этого пользователя.'},
@@ -491,7 +436,9 @@ class UserViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def subscriptions(self, request):
-        follows = Subscription.objects.filter(user=request.user)
+        follows = Subscription.objects.filter(
+            user=request.user
+        ).select_related('author')
         authors = [follow.author for follow in follows]
         pages = self.paginate_queryset(authors)
         serializer = SubscriptionSerializer(
