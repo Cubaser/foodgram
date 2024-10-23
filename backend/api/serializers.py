@@ -1,11 +1,7 @@
-import base64
-
-from django.core.files.base import ContentFile
 from rest_framework import serializers
-
+from foodgram.constants import Constants
 from recipes.models import Favorite, Ingredient, Recipe, RecipeIngredient, Tag
 from user.models import Subscription, User
-from foodgram.constants import Constants
 
 
 class TagSerializer(serializers.ModelSerializer):
