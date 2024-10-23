@@ -1,8 +1,7 @@
 from rest_framework import serializers
-
-from ..foodgram.constants import Constants
-from ..recipes.models import Ingredient, Recipe, RecipeIngredient, Tag
-from ..user.models import User
+from foodgram.constants import Constants
+from user.models import User
+from recipes.models import Ingredient, Recipe, RecipeIngredient, Tag
 
 
 class TagSerializer(serializers.ModelSerializer):
