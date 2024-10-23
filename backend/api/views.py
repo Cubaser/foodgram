@@ -5,15 +5,15 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser.serializers import SetPasswordSerializer
-from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import (IsAuthenticated,
                                         IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
-from user.models import Subscription, User
 
+from user.models import Subscription, User
+from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from .serializers import (IngredientSerializer, RecipeSerializer,
                           SubscriptionSerializer, TagSerializer,
                           UserCreateSerializer, UserListSerializer,
