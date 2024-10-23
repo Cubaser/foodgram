@@ -12,9 +12,8 @@ from rest_framework.permissions import (IsAuthenticated,
                                         IsAuthenticatedOrReadOnly)
 from rest_framework.response import Response
 
-from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
-from user.models import Subscription, User
-
+from ..recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
+from ..user.models import Subscription, User
 from .serializers import (IngredientSerializer, RecipeSerializer,
                           SubscriptionSerializer, TagSerializer,
                           UserCreateSerializer, UserListSerializer,
