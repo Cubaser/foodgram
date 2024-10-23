@@ -5,7 +5,6 @@ from django.urls import reverse
 
 from foodgram.constants import Constants
 
-
 User = get_user_model()
 
 
