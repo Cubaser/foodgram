@@ -15,9 +15,12 @@ from rest_framework.response import Response
 from user.models import Subscription, User
 from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from .serializers import (IngredientSerializer, RecipeSerializer,
-                          SubscriptionSerializer, TagSerializer,
-                          UserCreateSerializer, UserListSerializer,
-                          UserRetrieveSerializer, UserSerializer)
+                          RecipeShortSerializer, SubscriptionSerializer,
+                          SubscriptionCreateSerializer,
+                          SubscriptionDeleteSerializer,
+                          TagSerializer, UserCreateSerializer,
+                          UserListSerializer, UserRetrieveSerializer,
+                          UserSerializer)
 
 
 class UserPagination(PageNumberPagination):
@@ -71,6 +74,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def process_image(self, image_data):
+        if image_data and image_data.startswith('data:image'):
+            format, imgstr = image_data.split(';base64,')
+            ext = format.split('/')[-1]
+            return ContentFile(base64.b64decode(imgstr), name=f'temp.{ext}')
+        return None
+
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
 
@@ -81,14 +91,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             )
 
         image_data = request.data.get('image', None)
-        if image_data and image_data.startswith('data:image'):
-            format, imgstr = image_data.split(';base64,')
-            ext = format.split('/')[-1]
-            image_data = ContentFile(
-                base64.b64decode(imgstr),
-                name=f'temp.{ext}'
-            )
-            request.data['image'] = image_data
+        processed_image = self.process_image(image_data)
+        if processed_image:
+            request.data['image'] = processed_image
 
         serializer = self.get_serializer(
             instance, data=request.data,
@@ -99,7 +104,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-
         image_data = request.data.get('image', None)
         if not image_data:
             return Response(
@@ -107,14 +111,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if image_data and image_data.startswith('data:image'):
-            format, imgstr = image_data.split(';base64,')
-            ext = format.split('/')[-1]
-            image_data = ContentFile(
-                base64.b64decode(imgstr),
-                name=f'temp.{ext}'
-            )
-            request.data['image'] = image_data
+        processed_image = self.process_image(image_data)
+        if processed_image:
+            request.data['image'] = processed_image
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -157,16 +156,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
             ShoppingCart.objects.create(user=user, recipe=recipe)
 
-            response_data = {
-                'id': recipe.id,
-                'name': recipe.name,
-                'image': request.build_absolute_uri(
-                    recipe.image.url) if recipe.image else None,
-                'cooking_time': recipe.cooking_time
-            }
+            response_data = RecipeShortSerializer(
+                recipe, context={'request': request}
+            ).data
+
             return Response(response_data, status=status.HTTP_201_CREATED)
 
-        elif request.method == 'DELETE':
+        if request.method == 'DELETE':
             cart_item = user.shopping_cart.filter(recipe=recipe).first()
             if not cart_item:
                 return Response(
@@ -207,9 +203,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             'Content-Disposition'
         ] = 'attachment; filename="shopping_list.txt"'
 
-        response.write("Список покупок:\n\n")
+        response.write('Список покупок:\n\n')
         for item in shopping_list:
-            response.write(f"{item}\n")
+            response.write(f'{item}\n')
 
         return response
 
@@ -223,7 +219,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = self.get_object()
 
         if request.method == 'POST':
-            if recipe in user.favorites.all():
+            if Favorite.objects.filter(user=user, recipe=recipe).exists():
                 return Response(
                     {'detail': 'Рецепт уже в избранном'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -231,16 +227,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
             Favorite.objects.create(user=user, recipe=recipe)
 
-            recipe_data = {
-                'id': recipe.id,
-                'name': recipe.name,
-                'image': request.build_absolute_uri(recipe.image.url),
-                'cooking_time': recipe.cooking_time
-            }
+            recipe_data = RecipeShortSerializer(
+                recipe, context={'request': request}
+            ).data
 
             return Response(recipe_data, status=status.HTTP_201_CREATED)
 
-        elif request.method == 'DELETE':
+        if request.method == 'DELETE':
             if not user.favorites.filter(id=recipe.id).exists():
                 return Response(
                     {'detail': 'Рецепт не добавлен в избранное'},
@@ -349,7 +342,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK
                 )
             return Response(
-                {'detail': 'No avatar provided.'},
+                {'detail': 'Аватар не указан.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -362,7 +355,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_204_NO_CONTENT
                 )
             return Response(
-                {'detail': 'No avatar to delete.'},
+                {'detail': 'Нет аватара для удаления.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -382,8 +375,6 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    from rest_framework.exceptions import PermissionDenied
-
     @action(
         detail=True,
         methods=['post', 'delete'],
@@ -394,15 +385,12 @@ class UserViewSet(viewsets.ModelViewSet):
         author = get_object_or_404(User, pk=pk)
 
         if request.method == 'POST':
-            if user == author:
-                return Response(
-                    {'detail': 'Нельзя подписаться на самого себя.'},
-                    status=status.HTTP_400_BAD_REQUEST)
+            serializer = SubscriptionCreateSerializer(
+                data={'author': author.id},
+                context={'request': request}
+            )
 
-            if user.follower.filter(author=author).exists():
-                return Response(
-                    {'detail': 'Вы уже подписаны на этого пользователя.'},
-                    status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(raise_exception=True)
 
             Subscription.objects.create(user=user, author=author)
 
@@ -411,18 +399,20 @@ class UserViewSet(viewsets.ModelViewSet):
             if recipes_limit:
                 context['recipes_limit'] = int(recipes_limit)
 
-            serializer = SubscriptionSerializer(author, context=context)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            author_serializer = SubscriptionSerializer(author, context=context)
+            return Response(
+                author_serializer.data,
+                status=status.HTTP_201_CREATED
+            )
 
         elif request.method == 'DELETE':
-            subscription = user.follower.filter(author=author)
-            if not subscription.exists():
-                return Response(
-                    {'detail': 'Вы не подписаны на этого пользователя.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            serializer = SubscriptionDeleteSerializer(
+                data={'author': author.id},
+                context={'request': request}
+            )
+            serializer.is_valid(raise_exception=True)
+            user.follower.filter(author=author).delete()
 
-            subscription.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(
