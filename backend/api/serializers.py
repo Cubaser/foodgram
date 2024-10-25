@@ -157,7 +157,6 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return obj.following.filter(user=user).exists()
 
 
-
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
@@ -178,6 +177,7 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
 
 class SubscriptionDeleteSerializer(serializers.Serializer):
     author = serializers.IntegerField()
+
 
     def validate(self, data):
         user = self.context['request'].user
@@ -318,4 +318,3 @@ class RecipeSerializer(serializers.ModelSerializer):
             'image'] = instance.image.url if instance.image else None
         representation['tags'] = TagSerializer(instance.tags, many=True).data
         return representation
-
