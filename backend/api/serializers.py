@@ -175,9 +175,9 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
 
         return data
 
+
 class SubscriptionDeleteSerializer(serializers.Serializer):
     author = serializers.IntegerField()
-
 
     def validate(self, data):
         user = self.context['request'].user
