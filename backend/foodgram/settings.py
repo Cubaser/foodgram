@@ -7,16 +7,11 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY', default='django-insecure-ft2p*2n7*owa=r4(1--mcn%=w6jl6#f1drf&j942u-e8v(znbb')
+SECRET_KEY = os.getenv('SECRET_KEY', default='django-insecure-ft*242u-e8vnbb')
 
-DEBUG = False
+DEBUG = os.getenv('DEBUG')
 
-ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    '89.169.163.122',
-    'foodgram.sytes.net'
-]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS').split(',')
 
 
 INSTALLED_APPS = [
