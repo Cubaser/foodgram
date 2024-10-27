@@ -1,4 +1,5 @@
 import base64
+from collections import defaultdict
 
 from django.core.files.base import ContentFile
 from django.http import HttpResponse
@@ -13,7 +14,9 @@ from rest_framework.permissions import (IsAuthenticated,
 from rest_framework.response import Response
 
 from user.models import Subscription, User
-from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
+from recipes.models import (Favorite, Ingredient,
+                            Recipe, ShoppingCart,
+                            Tag, RecipeIngredient)
 from .serializers import (IngredientSerializer, RecipeSerializer,
                           RecipeShortSerializer, SubscriptionSerializer,
                           SubscriptionCreateSerializer,
@@ -179,7 +182,6 @@ class RecipeViewSet(viewsets.ModelViewSet):
         permission_classes=[IsAuthenticated]
     )
     def download_shopping_cart(self, request):
-
         user = request.user
         shopping_cart = user.shopping_cart.all()
 
@@ -189,20 +191,24 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        shopping_list = []
+        ingredient_totals = defaultdict(int)
         for item in shopping_cart:
-            ingredients = item.recipe.ingredients.all()
+            recipe = item.recipe
+            ingredients = RecipeIngredient.objects.filter(recipe=recipe)
+
             for ingredient in ingredients:
-                shopping_list.append(
-                    f"{ingredient.name} - {ingredient.amount} "
-                    f"{ingredient.unit}"
-                )
+                key = (ingredient.ingredient.name,
+                       ingredient.ingredient.measurement_unit)
+                ingredient_totals[key] += ingredient.amount
+
+        shopping_list = [
+            f"{name} - {amount} {unit}"
+            for (name, unit), amount in ingredient_totals.items()
+        ]
 
         response = HttpResponse(content_type='text/plain')
         response[
-            'Content-Disposition'
-        ] = 'attachment; filename="shopping_list.txt"'
-
+            'Content-Disposition'] = 'attachment; filename="shopping_list.txt"'
         response.write('Список покупок:\n\n')
         for item in shopping_list:
             response.write(f'{item}\n')

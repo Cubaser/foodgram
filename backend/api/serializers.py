@@ -262,16 +262,19 @@ class RecipeSerializer(serializers.ModelSerializer):
 
         recipe_ingredients = []
         for ingredient_data in ingredients_data:
-            ingredient_id = ingredient_data.get('id')
+            ingredient = ingredient_data.get('ingredient')
             amount = ingredient_data.get('amount')
-            if ingredient_id is not None and amount is not None:
-                recipe_ingredients.append(
-                    RecipeIngredient(
-                        recipe=recipe,
-                        ingredient_id=ingredient_id,
-                        amount=amount
-                    )
-                )
+
+            if not isinstance(ingredient, Ingredient):
+                ingredient = Ingredient.objects.get(id=ingredient)
+
+            recipe_ingredients.append(
+                RecipeIngredient(
+                    recipe=recipe,
+                    ingredient=ingredient,
+                    amount=amount)
+            )
+
         RecipeIngredient.objects.bulk_create(recipe_ingredients)
 
     def handle_tags(self, recipe, tags_data):
