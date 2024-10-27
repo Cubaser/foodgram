@@ -33,6 +33,8 @@ git clone git@github.com:cubaser/foodgram.git
 * DB_HOST=db
 * DB_PORT=5432
 * SECRET_KEY=secret_key_django_project
+* DEBUG=False
+* ALLOWED_HOSTS=127.0.0.1,localhost
 
 ### Сборка и запуск контейнеров: 
 Перейдите в папку infra и выполните
@@ -61,6 +63,8 @@ docker compose exec backend cp -r /app/collected_static/. /backend_static/static
 * Веб-сервер и прокси: NGINX
 * Контейнеризация и развёртывание: Docker, Docker Compose
 * CI/CD: GitHub Actions для автоматической проверки, сборки и деплоя
+
+Адрес сайта https://foodgram.sytes.net/
 
 Автор
 
